@@ -102,7 +102,7 @@ function LoginPage() {
               mb: 1,
             }}
           >
-            Sipariş Takip Sistemi
+            Esans Takip Sistemi
           </Typography>
         </Box>
         <Box component="form" onSubmit={handleSubmit}>
@@ -171,12 +171,7 @@ function LoginPage() {
               Hesabınız yok mu? Kayıt Ol
             </Link>
           </Typography>
-          <Typography align="center" color="textSecondary" sx={{ mt: 2 }}>
-            Demo Hesapları:
-          </Typography>
-          <Typography align="center" color="textSecondary" fontSize="small">
-            Admin girişi: admin@esans.com / 951623
-          </Typography>
+
         </Box>
       </Paper>
       {error && (
