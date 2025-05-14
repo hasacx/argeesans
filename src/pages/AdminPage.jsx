@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useFirebase } from '../firebase/FirebaseContext' // useFirebase hook provides subscribeToDemands
+import { useFirebase } from '../firebase/FirebaseContext';
 import {
   Box,
   Container,
@@ -21,8 +21,9 @@ import {
   Snackbar,
   IconButton,
   Collapse,
-  Chip
-} from '@mui/material'
+  Chip,
+  Checkbox // Added Checkbox for selection
+} from '@mui/material';
 import MuiAlert from '@mui/material/Alert'
 import {
   Add as AddIcon,
@@ -32,11 +33,13 @@ import {
   CheckCircle as CheckCircleIcon,
   KeyboardArrowDown as KeyboardArrowDownIcon,
   KeyboardArrowUp as KeyboardArrowUpIcon,
-  Autorenew
-} from '@mui/icons-material'
+  Autorenew,
+  DeleteSweep as DeleteSweepIcon // For bulk delete
+} from '@mui/icons-material';
 import * as XLSX from 'xlsx'
 
 function AdminPage() {
+  const [selectedEssences, setSelectedEssences] = useState([]); // State for selected essences
   const navigate = useNavigate();
   const { currentUser, loading } = useFirebase(); // Get currentUser and loading state from context
 
@@ -68,7 +71,7 @@ function AdminPage() {
   }
 
   // currentUser is already destructured above
-  const { subscribeToEssences, addEssence, updateEssence, deleteEssence, subscribeToDemands } = useFirebase();
+  const { subscribeToEssences, addEssence, updateEssence, deleteEssence, deleteMultipleEssences, subscribeToDemands } = useFirebase(); // Added deleteMultipleEssences
   const [essences, setEssences] = useState([])
   const [demandsByEssence, setDemandsByEssence] = useState({}) // State to hold demands grouped by essenceId
 
@@ -203,6 +206,41 @@ function AdminPage() {
     }
   }
 
+  const handleToggleSelectEssence = (essenceId) => {
+    setSelectedEssences((prevSelected) =>
+      prevSelected.includes(essenceId)
+        ? prevSelected.filter((id) => id !== essenceId)
+        : [...prevSelected, essenceId]
+    );
+  };
+
+  const handleSelectAllEssences = (event) => {
+    if (event.target.checked) {
+      const allEssenceIds = essences.map((essence) => essence.id);
+      setSelectedEssences(allEssenceIds);
+    } else {
+      setSelectedEssences([]);
+    }
+  };
+
+  const handleDeleteSelectedEssences = async () => {
+    if (selectedEssences.length === 0) {
+      setSnackbarMessage('Lütfen silmek için en az bir esans seçin.');
+      setOpenSnackbar(true);
+      return;
+    }
+    try {
+      await deleteMultipleEssences(selectedEssences);
+      setSnackbarMessage(`${selectedEssences.length} esans ve ilişkili talepleri başarıyla silindi.`);
+      setOpenSnackbar(true);
+      setSelectedEssences([]); // Clear selection after deletion
+    } catch (error) {
+      console.error('Error deleting selected essences:', error);
+      setSnackbarMessage('Seçili esanslar silinirken bir hata oluştu.');
+      setOpenSnackbar(true);
+    }
+  };
+
   const handleDelete = async (id) => {
     try {
       await deleteEssence(id)
@@ -325,6 +363,17 @@ function AdminPage() {
           >
             Yeni Esans Ekle
           </Button>
+          {selectedEssences.length > 0 && (
+            <Button
+              variant="contained"
+              color="error"
+              startIcon={<DeleteSweepIcon />}
+              onClick={handleDeleteSelectedEssences}
+              sx={{ ml: 2 }}
+            >
+              Seçilenleri Sil ({selectedEssences.length})
+            </Button>
+          )}
         </Box>
       </Box>
 
@@ -336,6 +385,14 @@ function AdminPage() {
           <Table>
             <TableHead>
               <TableRow>
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    indeterminate={selectedEssences.length > 0 && selectedEssences.length < essences.length}
+                    checked={essences.length > 0 && selectedEssences.length === essences.length}
+                    onChange={handleSelectAllEssences}
+                    inputProps={{ 'aria-label': 'select all essences' }}
+                  />
+                </TableCell>
                 <TableCell padding="none" width="48px" />
                 <TableCell>Esans Adı</TableCell>
                 <TableCell>Esans Kodu</TableCell>
@@ -353,7 +410,14 @@ function AdminPage() {
                 
                 return (
                   <React.Fragment key={essence.id}>
-                    <TableRow>
+                    <TableRow hover selected={selectedEssences.includes(essence.id)}>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={selectedEssences.includes(essence.id)}
+                          onChange={() => handleToggleSelectEssence(essence.id)}
+                          inputProps={{ 'aria-labelledby': `essence-checkbox-${essence.id}` }}
+                        />
+                      </TableCell>
                       <TableCell padding="none">
                         <IconButton
                           size="small"

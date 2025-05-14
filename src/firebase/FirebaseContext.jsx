@@ -317,6 +317,34 @@ export const FirebaseProvider = ({ children }) => {
     });
   };
 
+  const deleteMultipleEssences = async (essenceIds) => {
+    const batch = writeBatch(db); // Initialize batch
+
+    try {
+      for (const essenceId of essenceIds) {
+        // 1. Find all demands associated with this essenceId
+        const demandsQuery = query(collection(db, 'demands'), where('essenceId', '==', essenceId));
+        const demandsSnapshot = await getDocs(demandsQuery);
+
+        // 2. Add delete operations for each associated demand to the batch
+        demandsSnapshot.forEach((demandDoc) => {
+          batch.delete(doc(db, 'demands', demandDoc.id));
+        });
+
+        // 3. Add delete operation for the essence itself to the batch
+        const essenceRef = doc(db, 'essences', essenceId);
+        batch.delete(essenceRef);
+      }
+
+      // 4. Commit the batch
+      await batch.commit();
+      console.log(`Successfully deleted ${essenceIds.length} essences and their associated demands.`);
+    } catch (error) {
+      console.error(`Error deleting multiple essences and/or their associated demands:`, error);
+      throw error;
+    }
+  };
+
   const subscribeToDemands = (callback) => {
     return onSnapshot(collection(db, 'demands'), (snapshot) => {
       const demands = snapshot.docs.map(doc => ({
@@ -343,7 +371,8 @@ export const FirebaseProvider = ({ children }) => {
     getUserDemands,
     deleteDemand,
     subscribeToEssences,
-    subscribeToDemands
+    subscribeToDemands,
+    deleteMultipleEssences // Add the new function to the context value
   };
 
   return (
