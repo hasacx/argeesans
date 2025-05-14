@@ -32,9 +32,10 @@ import {
 } from '@mui/icons-material'
 import { useTheme, useMediaQuery } from '@mui/material'
 import { Grid } from '@mui/material'
+import { Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material'
 
 function HomePage() {
-  const { subscribeToEssences, addDemand, subscribeToDemands } = useFirebase() // Add subscribeToDemands
+  const { currentUser, subscribeToEssences, addDemand, subscribeToDemands } = useFirebase() // Add currentUser and subscribeToDemands
   const [essences, setEssences] = useState([])
   const [demandsByEssence, setDemandsByEssence] = useState({}) // State to hold demands grouped by essenceId
 
@@ -78,6 +79,16 @@ function HomePage() {
     return () => unsubscribeDemands();
   }, [subscribeToDemands]);
 
+  // Effect to get current user's demanded essence IDs
+  useEffect(() => {
+    if (currentUser && demandsByEssence) {
+      const userEssenceIds = Object.keys(demandsByEssence).filter(essenceId => {
+        return demandsByEssence[essenceId].some(demand => demand.userId === currentUser.uid);
+      });
+      setUserDemandEssenceIds(userEssenceIds);
+    }
+  }, [currentUser, demandsByEssence]);
+
   const handleCreateDemand = async (essence) => {
     const amount = 50
     try {
@@ -112,6 +123,7 @@ function HomePage() {
 
   const [searchTerm, setSearchTerm] = useState('')
   const [activeFilter, setActiveFilter] = useState('all')
+  const [userDemandEssenceIds, setUserDemandEssenceIds] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all')
 
   const categories = [...new Set(essences.map(essence => essence.category))].filter(Boolean)
@@ -126,13 +138,15 @@ function HomePage() {
 
     switch(activeFilter) {
       case 'confirmed':
-        return matchesSearch && matchesCategory && essence.totalDemand >= 250
+        return matchesSearch && matchesCategory && essence.totalDemand >= 250;
       case 'under250':
-        return matchesSearch && matchesCategory && essence.totalDemand < 250
+        return matchesSearch && matchesCategory && essence.totalDemand < 250;
       case 'outOfStock':
-        return matchesSearch && matchesCategory && essence.stockAmount === essence.totalDemand
+        return matchesSearch && matchesCategory && essence.stockAmount === essence.totalDemand;
+      case 'myDemands':
+        return matchesSearch && matchesCategory && userDemandEssenceIds.includes(essence.id);
       default:
-        return matchesSearch && matchesCategory
+        return matchesSearch && matchesCategory;
     }
   })
 
@@ -196,7 +210,7 @@ function HomePage() {
           <Button
             variant="contained"
             color="primary"
-            onClick={() => handleCreateDemand(essence)}
+            onClick={() => handleOpenDemandDialog(essence)}
             disabled={essence.stockAmount === 0 || essence.stockAmount === essence.totalDemand}
             size="small"
           >
@@ -323,6 +337,15 @@ function HomePage() {
           >
             Bitenler
           </Button>
+          {currentUser && (
+            <Button
+              variant={activeFilter === 'myDemands' ? 'contained' : 'outlined'}
+              onClick={() => setActiveFilter('myDemands')}
+              sx={{ flex: 1 }}
+            >
+              Taleplerim
+            </Button>
+          )}
         </Box>
       </Box>
 
@@ -405,7 +428,7 @@ function HomePage() {
                           <Button
                             variant="contained"
                             color="primary"
-                            onClick={() => handleCreateDemand(essence)}
+                            onClick={() => handleOpenDemandDialog(essence)}
                             disabled={essence.stockAmount === 0 || essence.stockAmount === essence.totalDemand}
                           >
                             Talep Oluştur
@@ -453,21 +476,21 @@ function HomePage() {
           </TableContainer>
         )}
       </Box>
-
-      <Snackbar
-        open={openSnackbar}
-        autoHideDuration={6000}
-        onClose={() => setOpenSnackbar(false)}
-      >
-        <MuiAlert
-          elevation={6}
-          variant="filled"
-          severity={snackbarSeverity}
-          onClose={() => setOpenSnackbar(false)}
-        >
-          {snackbarMessage}
-        </MuiAlert>
-      </Snackbar>
+      <Dialog open={demandDialogOpen} onClose={handleCloseDemandDialog}>
+        <DialogTitle>Talep Miktarı Seç</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Button variant="outlined" onClick={decrementDemandAmount} disabled={demandAmount <= 10}>-</Button>
+            <Typography>{demandAmount} gr</Typography>
+            <Button variant="outlined" onClick={incrementDemandAmount} disabled={selectedEssenceForDemand && (demandAmount + 10 > selectedEssenceForDemand.stockAmount - selectedEssenceForDemand.totalDemand)}>+</Button>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDemandDialog}>İptal</Button>
+          <Button variant="contained" onClick={() => handleCreateDemand(selectedEssenceForDemand, demandAmount)} disabled={!selectedEssenceForDemand}>Talep Oluştur</Button>
+        </DialogActions>
+      </Dialog>
+      {/* ... existing code ... */}
     </Box>
   )
 }

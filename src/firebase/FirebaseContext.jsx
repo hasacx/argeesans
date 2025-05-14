@@ -200,24 +200,24 @@ export const FirebaseProvider = ({ children }) => {
   };
 
   const deleteEssence = async (essenceId) => {
+    const batch = writeBatch(db); // Initialize batch
     try {
       // 1. Find all demands associated with this essenceId
       const demandsQuery = query(collection(db, 'demands'), where('essenceId', '==', essenceId));
       const demandsSnapshot = await getDocs(demandsQuery);
 
-      // 2. Delete each associated demand
-      // For a large number of demands, consider using a batched write or a Cloud Function for better performance and atomicity.
-      const deletePromises = [];
+      // 2. Add delete operations for each associated demand to the batch
       demandsSnapshot.forEach((demandDoc) => {
-        deletePromises.push(deleteDoc(doc(db, 'demands', demandDoc.id)));
+        batch.delete(doc(db, 'demands', demandDoc.id));
       });
-      await Promise.all(deletePromises);
-      console.log(`Successfully deleted ${deletePromises.length} associated demands for essence ${essenceId}.`);
 
-      // 3. Delete the essence itself
+      // 3. Add delete operation for the essence itself to the batch
       const essenceRef = doc(db, 'essences', essenceId);
-      await deleteDoc(essenceRef);
-      console.log(`Successfully deleted essence ${essenceId}.`);
+      batch.delete(essenceRef);
+
+      // 4. Commit the batch
+      await batch.commit();
+      console.log(`Successfully deleted essence ${essenceId} and its associated demands.`);
 
     } catch (error) {
       console.error(`Error deleting essence ${essenceId} and/or its associated demands:`, error);

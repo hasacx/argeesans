@@ -176,9 +176,18 @@ function AdminPage() {
       return
     }
 
-    const codeExists = essences.some(essence => 
-      essence.code === formData.code && (!editingEssence || essence.id !== editingEssence.id)
-    )
+    let codeExists = false;
+    if (editingEssence && formData.code === editingEssence.code) {
+      // If editing and the code hasn't changed, skip the uniqueness check for the code.
+      codeExists = false;
+    } else {
+      // If adding a new essence OR if editing and the code HAS changed,
+      // then check if the new code already exists among other essences.
+      codeExists = essences.some(essence => 
+        essence.code === formData.code && 
+        (!editingEssence || essence.id !== editingEssence.id) // Ensure we are not comparing the essence with itself if its code is being changed
+      );
+    }
 
     if (codeExists) {
       setSnackbarMessage('Bu kod zaten kullanılmakta')
