@@ -496,3 +496,58 @@ function HomePage() {
 }
 
 export default HomePage
+
+const [demandDialogOpen, setDemandDialogOpen] = useState(false);
+const [selectedEssenceForDemand, setSelectedEssenceForDemand] = useState(null);
+const [demandAmount, setDemandAmount] = useState(50);
+
+const handleOpenDemandDialog = (essence) => {
+  setSelectedEssenceForDemand(essence);
+  setDemandAmount(50);
+  setDemandDialogOpen(true);
+};
+
+const handleCloseDemandDialog = () => {
+  setDemandDialogOpen(false);
+  setSelectedEssenceForDemand(null);
+};
+
+const incrementDemandAmount = () => {
+  if (selectedEssenceForDemand) {
+    const maxAmount = selectedEssenceForDemand.stockAmount - selectedEssenceForDemand.totalDemand;
+    if (demandAmount + 10 <= maxAmount) {
+      setDemandAmount(demandAmount + 10);
+    }
+  }
+};
+
+const decrementDemandAmount = () => {
+  if (demandAmount > 10) {
+    setDemandAmount(demandAmount - 10);
+  }
+};
+
+// Update handleCreateDemand to accept amount and essence
+const handleCreateDemand = async (essence, amount = 50) => {
+  try {
+    if (essence.stockAmount < amount || essence.totalDemand + amount > essence.stockAmount) {
+      setSnackbarMessage('Stok miktarı yetersiz');
+      setSnackbarSeverity('error');
+      setOpenSnackbar(true);
+      return;
+    }
+    await addDemand(essence.id, {
+      amount,
+      totalPrice: amount * essence.price,
+      category: essence.category
+    });
+    setSnackbarMessage('Talep başarıyla oluşturuldu');
+    setSnackbarSeverity('success');
+    setDemandDialogOpen(false);
+    setSelectedEssenceForDemand(null);
+  } catch (error) {
+    setSnackbarMessage(error.message || 'Talep oluşturulurken bilinmeyen bir hata oluştu.');
+    setSnackbarSeverity('error');
+  }
+  setOpenSnackbar(true);
+};
