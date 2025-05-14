@@ -32,10 +32,9 @@ import {
 } from '@mui/icons-material'
 import { useTheme, useMediaQuery } from '@mui/material'
 import { Grid } from '@mui/material'
-import { Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material'
 
 function HomePage() {
-  const { currentUser, subscribeToEssences, addDemand, subscribeToDemands } = useFirebase() // Add currentUser and subscribeToDemands
+  const { subscribeToEssences, addDemand, subscribeToDemands } = useFirebase() // Add subscribeToDemands
   const [essences, setEssences] = useState([])
   const [demandsByEssence, setDemandsByEssence] = useState({}) // State to hold demands grouped by essenceId
 
@@ -79,39 +78,42 @@ function HomePage() {
     return () => unsubscribeDemands();
   }, [subscribeToDemands]);
 
-  // Effect to get current user's demanded essence IDs
-  useEffect(() => {
-    if (currentUser && demandsByEssence) {
-      const userEssenceIds = Object.keys(demandsByEssence).filter(essenceId => {
-        return demandsByEssence[essenceId].some(demand => demand.userId === currentUser.uid);
-      });
-      setUserDemandEssenceIds(userEssenceIds);
-    }
-  }, [currentUser, demandsByEssence]);
+  const [demandQuantities, setDemandQuantities] = useState({});
+
+  const handleStepperChange = (essenceId, delta) => {
+    setDemandQuantities(prev => {
+      const current = prev[essenceId] || 1;
+      let next = current + delta;
+      if (next < 1) next = 1;
+      return { ...prev, [essenceId]: next };
+    });
+  };
 
   const handleCreateDemand = async (essence) => {
-    const amount = 50
+    const quantity = demandQuantities[essence.id] || 1;
+    const amount = 50;
+    const totalAmount = amount * quantity;
     try {
-      if (essence.stockAmount < amount || essence.totalDemand + amount > essence.stockAmount) {
-        setSnackbarMessage('Stok miktarı yetersiz')
-        setSnackbarSeverity('error')
-        setOpenSnackbar(true)
-        return
+      if (essence.stockAmount < totalAmount || essence.totalDemand + totalAmount > essence.stockAmount) {
+        setSnackbarMessage('Stok miktarı yetersiz');
+        setSnackbarSeverity('error');
+        setOpenSnackbar(true);
+        return;
       }
-
-      await addDemand(essence.id, {
-        amount,
-        totalPrice: amount * essence.price,
-        category: essence.category
-      })
-
-      setSnackbarMessage('Talep başarıyla oluşturuldu')
-      setSnackbarSeverity('success')
+      for (let i = 0; i < quantity; i++) {
+        await addDemand(essence.id, {
+          amount,
+          totalPrice: amount * essence.price,
+          category: essence.category
+        });
+      }
+      setSnackbarMessage(quantity + ' adet talep başarıyla oluşturuldu.');
+      setSnackbarSeverity('success');
     } catch (error) {
-      setSnackbarMessage(error.message || 'Talep oluşturulurken bilinmeyen bir hata oluştu.')
-      setSnackbarSeverity('error')
+      setSnackbarMessage(error.message || 'Talep oluşturulurken bilinmeyen bir hata oluştu.');
+      setSnackbarSeverity('error');
     }
-    setOpenSnackbar(true)
+    setOpenSnackbar(true);
   }
 
   const toggleRow = (id) => {
@@ -123,7 +125,6 @@ function HomePage() {
 
   const [searchTerm, setSearchTerm] = useState('')
   const [activeFilter, setActiveFilter] = useState('all')
-  const [userDemandEssenceIds, setUserDemandEssenceIds] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all')
 
   const categories = [...new Set(essences.map(essence => essence.category))].filter(Boolean)
@@ -138,15 +139,13 @@ function HomePage() {
 
     switch(activeFilter) {
       case 'confirmed':
-        return matchesSearch && matchesCategory && essence.totalDemand >= 250;
+        return matchesSearch && matchesCategory && essence.totalDemand >= 250
       case 'under250':
-        return matchesSearch && matchesCategory && essence.totalDemand < 250;
+        return matchesSearch && matchesCategory && essence.totalDemand < 250
       case 'outOfStock':
-        return matchesSearch && matchesCategory && essence.stockAmount === essence.totalDemand;
-      case 'myDemands':
-        return matchesSearch && matchesCategory && userDemandEssenceIds.includes(essence.id);
+        return matchesSearch && matchesCategory && essence.stockAmount === essence.totalDemand
       default:
-        return matchesSearch && matchesCategory;
+        return matchesSearch && matchesCategory
     }
   })
 
@@ -207,15 +206,38 @@ function HomePage() {
               size="small"
             />
           )}
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={() => handleOpenDemandDialog(essence)}
-            disabled={essence.stockAmount === 0 || essence.stockAmount === essence.totalDemand}
-            size="small"
-          >
-            Talep Oluştur
-          </Button>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => handleStepperChange(essence.id, -1)}
+              disabled={(demandQuantities[essence.id] || 1) <= 1}
+              sx={{ minWidth: 32, px: 0 }}
+            >
+              -
+            </Button>
+            <Typography variant="body2" sx={{ mx: 1, minWidth: 24, textAlign: 'center' }}>
+              {demandQuantities[essence.id] || 1}
+            </Typography>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => handleStepperChange(essence.id, 1)}
+              sx={{ minWidth: 32, px: 0 }}
+            >
+              +
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={() => handleCreateDemand(essence)}
+              disabled={essence.stockAmount === 0 || essence.stockAmount === essence.totalDemand}
+              size="small"
+              sx={{ ml: 1 }}
+            >
+              Talep Oluştur
+            </Button>
+          </Box>
         </Box>
 
         <Collapse in={openRows[essence.id]} timeout="auto" unmountOnExit>
@@ -337,15 +359,6 @@ function HomePage() {
           >
             Bitenler
           </Button>
-          {currentUser && (
-            <Button
-              variant={activeFilter === 'myDemands' ? 'contained' : 'outlined'}
-              onClick={() => setActiveFilter('myDemands')}
-              sx={{ flex: 1 }}
-            >
-              Taleplerim
-            </Button>
-          )}
         </Box>
       </Box>
 
@@ -428,7 +441,7 @@ function HomePage() {
                           <Button
                             variant="contained"
                             color="primary"
-                            onClick={() => handleOpenDemandDialog(essence)}
+                            onClick={() => handleCreateDemand(essence)}
                             disabled={essence.stockAmount === 0 || essence.stockAmount === essence.totalDemand}
                           >
                             Talep Oluştur
@@ -476,78 +489,23 @@ function HomePage() {
           </TableContainer>
         )}
       </Box>
-      <Dialog open={demandDialogOpen} onClose={handleCloseDemandDialog}>
-        <DialogTitle>Talep Miktarı Seç</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Button variant="outlined" onClick={decrementDemandAmount} disabled={demandAmount <= 10}>-</Button>
-            <Typography>{demandAmount} gr</Typography>
-            <Button variant="outlined" onClick={incrementDemandAmount} disabled={selectedEssenceForDemand && (demandAmount + 10 > selectedEssenceForDemand.stockAmount - selectedEssenceForDemand.totalDemand)}>+</Button>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDemandDialog}>İptal</Button>
-          <Button variant="contained" onClick={() => handleCreateDemand(selectedEssenceForDemand, demandAmount)} disabled={!selectedEssenceForDemand}>Talep Oluştur</Button>
-        </DialogActions>
-      </Dialog>
-      {/* ... existing code ... */}
+
+      <Snackbar
+        open={openSnackbar}
+        autoHideDuration={6000}
+        onClose={() => setOpenSnackbar(false)}
+      >
+        <MuiAlert
+          elevation={6}
+          variant="filled"
+          severity={snackbarSeverity}
+          onClose={() => setOpenSnackbar(false)}
+        >
+          {snackbarMessage}
+        </MuiAlert>
+      </Snackbar>
     </Box>
   )
 }
 
 export default HomePage
-
-const [demandDialogOpen, setDemandDialogOpen] = useState(false);
-const [selectedEssenceForDemand, setSelectedEssenceForDemand] = useState(null);
-const [demandAmount, setDemandAmount] = useState(50);
-
-const handleOpenDemandDialog = (essence) => {
-  setSelectedEssenceForDemand(essence);
-  setDemandAmount(50);
-  setDemandDialogOpen(true);
-};
-
-const handleCloseDemandDialog = () => {
-  setDemandDialogOpen(false);
-  setSelectedEssenceForDemand(null);
-};
-
-const incrementDemandAmount = () => {
-  if (selectedEssenceForDemand) {
-    const maxAmount = selectedEssenceForDemand.stockAmount - selectedEssenceForDemand.totalDemand;
-    if (demandAmount + 10 <= maxAmount) {
-      setDemandAmount(demandAmount + 10);
-    }
-  }
-};
-
-const decrementDemandAmount = () => {
-  if (demandAmount > 10) {
-    setDemandAmount(demandAmount - 10);
-  }
-};
-
-// Update handleCreateDemand to accept amount and essence
-const handleCreateDemand = async (essence, amount = 50) => {
-  try {
-    if (essence.stockAmount < amount || essence.totalDemand + amount > essence.stockAmount) {
-      setSnackbarMessage('Stok miktarı yetersiz');
-      setSnackbarSeverity('error');
-      setOpenSnackbar(true);
-      return;
-    }
-    await addDemand(essence.id, {
-      amount,
-      totalPrice: amount * essence.price,
-      category: essence.category
-    });
-    setSnackbarMessage('Talep başarıyla oluşturuldu');
-    setSnackbarSeverity('success');
-    setDemandDialogOpen(false);
-    setSelectedEssenceForDemand(null);
-  } catch (error) {
-    setSnackbarMessage(error.message || 'Talep oluşturulurken bilinmeyen bir hata oluştu.');
-    setSnackbarSeverity('error');
-  }
-  setOpenSnackbar(true);
-};
